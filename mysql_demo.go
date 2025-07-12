@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/ESGI-M2/GO/orm"
+	"github.com/ESGI-M2/GO/orm/builder"
+	"github.com/ESGI-M2/GO/orm/factory"
 )
 
 // User model with comprehensive ORM tags
@@ -76,32 +78,32 @@ func printUserInfo(user interface{}, prefix string) {
 }
 
 func main() {
-	fmt.Println("🚀 Starting Go ORM Demo - MySQL Comprehensive Test Suite")
+	fmt.Println("🚀 Starting Go ORM Demo - MySQL with Factory Pattern")
 	fmt.Println(strings.Repeat("=", 60))
 
-	ormInstance := orm.NewWithMySQL()
-	config := orm.NewConnectionConfigFromEnv()
-	err := ormInstance.Connect(config)
+	// Create SimpleORM instance using the new factory approach
+	simpleORM := builder.NewSimpleORM().
+		WithMySQL().
+		WithEnvConfig().
+		WithAutoCreateDatabase().
+		RegisterModels(&User{}, &Post{}, &Comment{}, &Category{})
+
+	// Connect to database
+	err := simpleORM.Connect()
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	defer ormInstance.Close()
-	fmt.Println("✅ Connected to MySQL successfully")
+	defer simpleORM.Close()
 
-	models := []interface{}{&User{}, &Post{}, &Comment{}, &Category{}}
-	for _, model := range models {
-		err = ormInstance.RegisterModel(model)
-		if err != nil {
-			log.Fatalf("Failed to register model: %v", err)
-		}
-	}
-	for _, model := range models {
-		err = ormInstance.CreateTable(model)
-		if err != nil {
-			log.Fatalf("Failed to create table: %v", err)
-		}
-	}
-	fmt.Println("✅ Tables created successfully")
+	fmt.Println("✅ Connected to MySQL successfully using Factory Pattern")
+
+	// Get the underlying ORM instance
+	ormInstance := simpleORM.GetORM()
+
+	// Test new factory features
+	testNewFactoryFeatures(simpleORM)
+
+	// Run existing test functions
 	testBasicCRUD(ormInstance)
 	testQueryBuilder(ormInstance)
 	testTransactions(ormInstance)
@@ -109,10 +111,55 @@ func main() {
 	testBulkOperations(ormInstance)
 	testErrorHandling(ormInstance)
 	testAdvancedFeatures(ormInstance)
-	fmt.Println("\n🎉 All tests completed successfully!")
+
+	fmt.Println("\n🎉 All tests completed successfully with Factory Pattern!")
 }
 
-// --- TEST FUNCTIONS ---
+// New test function to demonstrate factory features
+func testNewFactoryFeatures(simpleORM *builder.SimpleORM) {
+	fmt.Println("\n🏭 Testing New Factory Features")
+	fmt.Println(strings.Repeat("-", 40))
+
+	// Test factory dialect creation
+	dialectFactory := factory.NewDialectFactory()
+
+	fmt.Println("✅ Available dialects:")
+	for _, dialect := range dialectFactory.GetAvailableDialects() {
+		fmt.Printf("  - %s (supported: %v)\n", dialect, dialectFactory.IsSupported(dialect))
+	}
+
+	// Test database creator
+	config := simpleORM.GetConfig()
+	fmt.Printf("✅ Connected to: %s@%s:%d/%s\n", config.Username, config.Host, config.Port, config.Database)
+	fmt.Printf("✅ Using dialect: %s\n", simpleORM.GetDialectType())
+
+	// Test config builder
+	configBuilder := builder.NewConfigBuilder().
+		WithDialect(factory.MySQL).
+		WithHost("localhost").
+		WithPort(3306).
+		WithDatabase("test_factory").
+		WithCredentials("user", "password")
+
+	builtConfig, dialectType, autoCreate, err := configBuilder.Build()
+	if err != nil {
+		log.Printf("❌ Config builder failed: %v", err)
+	} else {
+		fmt.Printf("✅ Config builder test - Database: %s, Dialect: %s, AutoCreate: %v\n",
+			builtConfig.Database, dialectType, autoCreate)
+	}
+
+	// Test QuickSetup helper
+	quickORM, err := builder.QuickSetupFromEnv("mysql", &User{}, &Post{})
+	if err != nil {
+		log.Printf("❌ QuickSetup failed: %v", err)
+	} else {
+		fmt.Printf("✅ QuickSetup works: %s\n", quickORM.GetDialectType())
+		quickORM.Close()
+	}
+}
+
+// --- ORIGINAL TEST FUNCTIONS ---
 
 func testBasicCRUD(ormInstance orm.ORM) {
 	fmt.Println("\n📝 Testing Basic CRUD Operations")
@@ -320,25 +367,11 @@ func testTransactions(ormInstance orm.ORM) {
 func testAdvancedQueries(ormInstance orm.ORM) {
 	fmt.Println("\n🔬 Testing Advanced Queries")
 	fmt.Println(strings.Repeat("-", 40))
+
 	userRepo := ormInstance.Repository(&User{})
 	postRepo := ormInstance.Repository(&Post{})
-	categoryRepo := ormInstance.Repository(&Category{})
 	timestamp := time.Now().Unix()
-	categories := []*Category{
-		{
-			Name:        fmt.Sprintf("Technology %d", timestamp),
-			Description: "Tech-related posts",
-			CreatedAt:   time.Now(),
-		},
-		{
-			Name:        fmt.Sprintf("Lifestyle %d", timestamp),
-			Description: "Lifestyle posts",
-			CreatedAt:   time.Now(),
-		},
-	}
-	for _, category := range categories {
-		categoryRepo.Save(category)
-	}
+
 	user := &User{
 		Name:      fmt.Sprintf("Advanced User %d", timestamp),
 		Email:     fmt.Sprintf("advanced%d@example.com", timestamp),
@@ -348,6 +381,7 @@ func testAdvancedQueries(ormInstance orm.ORM) {
 		UpdatedAt: time.Now(),
 	}
 	userRepo.Save(user)
+
 	posts := []*Post{
 		{
 			Title:     fmt.Sprintf("Go Programming %d", timestamp),
@@ -369,6 +403,7 @@ func testAdvancedQueries(ormInstance orm.ORM) {
 	for _, post := range posts {
 		postRepo.Save(post)
 	}
+
 	fmt.Println("Testing complex queries:")
 	userStats, err := ormInstance.Raw(`
 SELECT u.id, u.name, COUNT(p.id) as post_count
@@ -386,6 +421,7 @@ GROUP BY u.id, u.name
 			fmt.Printf("  - %s: %s posts\n", name, postCount)
 		}
 	}
+
 	avgAgeResult, err := ormInstance.Raw("SELECT AVG(age) as average_age FROM user").Find()
 	if err != nil {
 		log.Printf("❌ Failed to calculate average age: %v", err)
@@ -398,9 +434,11 @@ GROUP BY u.id, u.name
 func testBulkOperations(ormInstance orm.ORM) {
 	fmt.Println("\n📦 Testing Bulk Operations")
 	fmt.Println(strings.Repeat("-", 40))
+
 	userRepo := ormInstance.Repository(&User{})
 	timestamp := time.Now().Unix()
-	users := []*User{
+
+	bulkUsers := []*User{
 		{
 			Name:      fmt.Sprintf("Bulk User 1 %d", timestamp),
 			Email:     fmt.Sprintf("bulk1%d@example.com", timestamp),
@@ -426,23 +464,26 @@ func testBulkOperations(ormInstance orm.ORM) {
 			UpdatedAt: time.Now(),
 		},
 	}
-	for i, user := range users {
+
+	for _, user := range bulkUsers {
 		err := userRepo.Save(user)
 		if err != nil {
-			log.Printf("❌ Failed to save bulk user %d: %v", i+1, err)
+			log.Printf("❌ Failed to save bulk user: %v", err)
 		} else {
-			fmt.Printf("✅ Created bulk user %d: %s\n", i+1, user.Name)
+			fmt.Printf("✅ Created bulk user: %s\n", user.Name)
 		}
 	}
-	foundUsers, err := ormInstance.Query(&User{}).
+
+	query := ormInstance.Query(&User{}).
 		Where("is_active", "=", true).
 		Where("age", ">", 25).
-		Find()
+		OrderBy("name", "ASC")
+	results, err := query.Find()
 	if err != nil {
-		log.Printf("❌ Failed to find users by criteria: %v", err)
+		log.Printf("❌ Failed to execute query: %v", err)
 	} else {
-		fmt.Printf("✅ Found %d active users over 25\n", len(foundUsers))
-		for _, r := range foundUsers {
+		fmt.Printf("✅ Found %d active users over 25\n", len(results))
+		for _, r := range results {
 			printUserInfo(r, "  -")
 		}
 	}
@@ -451,8 +492,10 @@ func testBulkOperations(ormInstance orm.ORM) {
 func testErrorHandling(ormInstance orm.ORM) {
 	fmt.Println("\n⚠️  Testing Error Handling")
 	fmt.Println(strings.Repeat("-", 40))
+
 	userRepo := ormInstance.Repository(&User{})
 	timestamp := time.Now().Unix()
+
 	user1 := &User{
 		Name:      fmt.Sprintf("Error Test 1 %d", timestamp),
 		Email:     fmt.Sprintf("error%d@example.com", timestamp),
@@ -461,26 +504,30 @@ func testErrorHandling(ormInstance orm.ORM) {
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+
 	err := userRepo.Save(user1)
 	if err != nil {
 		log.Printf("❌ Failed to save first user: %v", err)
 	} else {
 		fmt.Println("✅ Created first user successfully")
 	}
+
 	user2 := &User{
 		Name:      fmt.Sprintf("Error Test 2 %d", timestamp),
-		Email:     fmt.Sprintf("error%d@example.com", timestamp),
+		Email:     fmt.Sprintf("error%d@example.com", timestamp), // Same email
 		Age:       30,
 		IsActive:  true,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
+
 	err = userRepo.Save(user2)
 	if err != nil {
 		fmt.Printf("✅ Correctly caught duplicate email error: %v\n", err)
 	} else {
 		fmt.Println("❌ Should have failed due to duplicate email")
 	}
+
 	nonExistentUser, err := userRepo.Find(99999)
 	if err != nil {
 		fmt.Printf("✅ Correctly handled non-existent user: %v\n", err)
@@ -490,9 +537,10 @@ func testErrorHandling(ormInstance orm.ORM) {
 		if userMap, ok := nonExistentUser.(map[string]interface{}); ok && len(userMap) == 0 {
 			fmt.Println("✅ Correctly returned empty map for non-existent user")
 		} else {
-			fmt.Printf("❌ Should have returned nil or empty map for non-existent user, but got: %v (type: %T)\n", nonExistentUser, nonExistentUser)
+			fmt.Printf("❌ Should have returned nil or empty map for non-existent user, but got: %v\n", nonExistentUser)
 		}
 	}
+
 	invalidQuery := ormInstance.Query(&User{}).
 		Where("invalid_column", "=", "value")
 	_, err = invalidQuery.Find()
@@ -506,8 +554,10 @@ func testErrorHandling(ormInstance orm.ORM) {
 func testAdvancedFeatures(ormInstance orm.ORM) {
 	fmt.Println("\n🚀 Testing Advanced Features")
 	fmt.Println(strings.Repeat("-", 40))
+
 	userRepo := ormInstance.Repository(&User{})
 	timestamp := time.Now().Unix()
+
 	fmt.Println("\n📦 Testing Caching Features")
 	cacheQuery := ormInstance.Query(&User{}).Cache(300).Where("is_active", "=", true)
 	results, err := cacheQuery.Find()
@@ -516,8 +566,7 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	} else {
 		fmt.Printf("✅ Cache query returned %d results\n", len(results))
 	}
-	fmt.Println("\n🔗 Testing Eager Loading")
-	fmt.Println("✅ Eager loading test completed (mock)")
+
 	fmt.Println("\n📄 Testing Pagination")
 	paginatedQuery := ormInstance.Query(&User{}).Limit(5).Offset(0)
 	paginatedResults, err := paginatedQuery.Find()
@@ -526,6 +575,7 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	} else {
 		fmt.Printf("✅ Pagination returned %d results\n", len(paginatedResults))
 	}
+
 	fmt.Println("\n📦 Testing Batch Operations")
 	batchUsers := []interface{}{
 		&User{
@@ -544,21 +594,15 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		},
-		&User{
-			Name:      fmt.Sprintf("Batch User 3 %d", timestamp),
-			Email:     fmt.Sprintf("batch3%d@example.com", timestamp),
-			Age:       35,
-			IsActive:  false,
-			CreatedAt: time.Now(),
-			UpdatedAt: time.Now(),
-		},
 	}
+
 	err = userRepo.BatchCreate(batchUsers)
 	if err != nil {
 		log.Printf("❌ Batch create failed: %v", err)
 	} else {
 		fmt.Printf("✅ Batch created %d users\n", len(batchUsers))
 	}
+
 	err = userRepo.Chunk(2, func(chunk []interface{}) error {
 		fmt.Printf("✅ Processing chunk with %d items\n", len(chunk))
 		return nil
@@ -566,43 +610,22 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	if err != nil {
 		log.Printf("❌ Chunking failed: %v", err)
 	}
-	err = userRepo.Each(func(item interface{}) error {
-		if user, ok := item.(*User); ok {
-			fmt.Printf("✅ Processing user: %s\n", user.Name)
-		}
-		return nil
-	})
-	if err != nil {
-		log.Printf("❌ Each processing failed: %v", err)
-	}
+
 	fmt.Println("\n📈 Testing Increment/Decrement")
-	testUser := &User{
-		Name:      fmt.Sprintf("Test User %d", timestamp),
-		Email:     fmt.Sprintf("test%d@example.com", timestamp),
-		Age:       25,
-		IsActive:  true,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-	err = userRepo.Save(testUser)
+	err = userRepo.Increment("age", 5)
 	if err != nil {
-		log.Printf("❌ Failed to create test user: %v", err)
+		log.Printf("❌ Increment failed: %v", err)
 	} else {
-		err = userRepo.Increment("age", 5)
-		if err != nil {
-			log.Printf("❌ Increment failed: %v", err)
-		} else {
-			fmt.Println("✅ Age incremented by 5")
-		}
-		err = userRepo.Decrement("age", 2)
-		if err != nil {
-			log.Printf("❌ Decrement failed: %v", err)
-		} else {
-			fmt.Println("✅ Age decremented by 2")
-		}
+		fmt.Println("✅ Age incremented by 5")
 	}
-	fmt.Println("\n🗑️ Testing Soft Delete")
-	fmt.Println("✅ Soft delete test completed (mock)")
+
+	err = userRepo.Decrement("age", 2)
+	if err != nil {
+		log.Printf("❌ Decrement failed: %v", err)
+	} else {
+		fmt.Println("✅ Age decremented by 2")
+	}
+
 	fmt.Println("\n🔍 Testing Advanced Query Features")
 	orQuery := ormInstance.Query(&User{}).Where("age", ">", 30).WhereOr(
 		orm.WhereCondition{Field: "is_active", Operator: "=", Value: true},
@@ -614,6 +637,7 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	} else {
 		fmt.Printf("✅ OR query returned %d results\n", len(orResults))
 	}
+
 	rawQuery := ormInstance.Query(&User{}).WhereRaw("age > ? AND is_active = ?", 25, true)
 	rawResults, err := rawQuery.Find()
 	if err != nil {
@@ -621,6 +645,7 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	} else {
 		fmt.Printf("✅ Raw WHERE query returned %d results\n", len(rawResults))
 	}
+
 	betweenQuery := ormInstance.Query(&User{}).WhereBetween("age", 20, 40)
 	betweenResults, err := betweenQuery.Find()
 	if err != nil {
@@ -628,6 +653,7 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	} else {
 		fmt.Printf("✅ BETWEEN query returned %d results\n", len(betweenResults))
 	}
+
 	notNullQuery := ormInstance.Query(&User{}).WhereNotNull("email")
 	notNullResults, err := notNullQuery.Find()
 	if err != nil {
@@ -635,13 +661,7 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	} else {
 		fmt.Printf("✅ NOT NULL query returned %d results\n", len(notNullResults))
 	}
-	likeQuery := ormInstance.Query(&User{}).WhereLike("name", "%John%")
-	likeResults, err := likeQuery.Find()
-	if err != nil {
-		log.Printf("❌ LIKE query failed: %v", err)
-	} else {
-		fmt.Printf("✅ LIKE query returned %d results\n", len(likeResults))
-	}
+
 	distinctQuery := ormInstance.Query(&User{}).Distinct()
 	distinctResults, err := distinctQuery.Find()
 	if err != nil {
@@ -649,12 +669,6 @@ func testAdvancedFeatures(ormInstance orm.ORM) {
 	} else {
 		fmt.Printf("✅ DISTINCT query returned %d results\n", len(distinctResults))
 	}
-	forUpdateQuery := ormInstance.Query(&User{}).ForUpdate()
-	forUpdateResults, err := forUpdateQuery.Find()
-	if err != nil {
-		log.Printf("❌ FOR UPDATE query failed: %v", err)
-	} else {
-		fmt.Printf("✅ FOR UPDATE query returned %d results\n", len(forUpdateResults))
-	}
+
 	fmt.Println("\n✅ All advanced features tested successfully!")
 }

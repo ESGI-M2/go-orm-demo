@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/ESGI-M2/GO/orm"
+	"github.com/ESGI-M2/GO/orm/builder"
+	"github.com/ESGI-M2/GO/orm/factory"
 )
 
 // PostgresUser model for PostgreSQL test
@@ -76,32 +78,32 @@ func printUserInfo(user interface{}, prefix string) {
 }
 
 func main() {
-	fmt.Println("🚀 Starting Go ORM Demo - PostgreSQL Comprehensive Test Suite")
+	fmt.Println("🚀 Starting Go ORM Demo - PostgreSQL with Factory Pattern")
 	fmt.Println(strings.Repeat("=", 60))
 
-	ormInstance := orm.NewWithPostgres()
-	config := orm.NewPostgresConnectionConfigFromEnv()
-	err := ormInstance.Connect(config)
+	// Create SimpleORM instance using the new factory approach
+	simpleORM := builder.NewSimpleORM().
+		WithPostgreSQL().
+		WithEnvConfig().
+		WithAutoCreateDatabase().
+		RegisterModels(&PostgresUser{}, &PostgresPost{}, &PostgresComment{}, &PostgresCategory{})
+
+	// Connect to database
+	err := simpleORM.Connect()
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	defer ormInstance.Close()
-	fmt.Println("✅ Connected to PostgreSQL successfully")
+	defer simpleORM.Close()
 
-	models := []interface{}{&PostgresUser{}, &PostgresPost{}, &PostgresComment{}, &PostgresCategory{}}
-	for _, model := range models {
-		err = ormInstance.RegisterModel(model)
-		if err != nil {
-			log.Fatalf("Failed to register model: %v", err)
-		}
-	}
-	for _, model := range models {
-		err = ormInstance.CreateTable(model)
-		if err != nil {
-			log.Fatalf("Failed to create table: %v", err)
-		}
-	}
-	fmt.Println("✅ Tables created successfully")
+	fmt.Println("✅ Connected to PostgreSQL successfully using Factory Pattern")
+
+	// Get the underlying ORM instance
+	ormInstance := simpleORM.GetORM()
+
+	// Test new factory features
+	testNewFactoryFeatures(simpleORM)
+
+	// Run existing test functions
 	testBasicCRUD(ormInstance)
 	testQueryBuilder(ormInstance)
 	testTransactions(ormInstance)
@@ -109,7 +111,52 @@ func main() {
 	testBulkOperations(ormInstance)
 	testErrorHandling(ormInstance)
 	testAdvancedFeatures(ormInstance)
-	fmt.Println("\n🎉 All tests completed successfully!")
+
+	fmt.Println("\n🎉 All tests completed successfully with Factory Pattern!")
+}
+
+// New test function to demonstrate factory features
+func testNewFactoryFeatures(simpleORM *builder.SimpleORM) {
+	fmt.Println("\n🏭 Testing New Factory Features")
+	fmt.Println(strings.Repeat("-", 40))
+
+	// Test factory dialect creation
+	dialectFactory := factory.NewDialectFactory()
+
+	fmt.Println("✅ Available dialects:")
+	for _, dialect := range dialectFactory.GetAvailableDialects() {
+		fmt.Printf("  - %s (supported: %v)\n", dialect, dialectFactory.IsSupported(dialect))
+	}
+
+	// Test database creator
+	config := simpleORM.GetConfig()
+	fmt.Printf("✅ Connected to: %s@%s:%d/%s\n", config.Username, config.Host, config.Port, config.Database)
+	fmt.Printf("✅ Using dialect: %s\n", simpleORM.GetDialectType())
+
+	// Test config builder
+	configBuilder := builder.NewConfigBuilder().
+		WithDialect(factory.PostgreSQL).
+		WithHost("localhost").
+		WithPort(5432).
+		WithDatabase("test_factory").
+		WithCredentials("user", "password")
+
+	builtConfig, dialectType, autoCreate, err := configBuilder.Build()
+	if err != nil {
+		log.Printf("❌ Config builder failed: %v", err)
+	} else {
+		fmt.Printf("✅ Config builder test - Database: %s, Dialect: %s, AutoCreate: %v\n",
+			builtConfig.Database, dialectType, autoCreate)
+	}
+
+	// Test QuickSetup helper
+	quickORM, err := builder.QuickSetupFromEnv("postgresql", &PostgresUser{}, &PostgresPost{})
+	if err != nil {
+		log.Printf("❌ QuickSetup failed: %v", err)
+	} else {
+		fmt.Printf("✅ QuickSetup works: %s\n", quickORM.GetDialectType())
+		quickORM.Close()
+	}
 }
 
 func testBasicCRUD(ormInstance orm.ORM) {
