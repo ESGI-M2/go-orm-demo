@@ -3,7 +3,7 @@ module go-orm-demo
 go 1.24.1
 
 require (
-	github.com/ESGI-M2/GO v1.2.2
+	github.com/ESGI-M2/GO v1.2.3
 	github.com/go-sql-driver/mysql v1.9.2
 )
 
