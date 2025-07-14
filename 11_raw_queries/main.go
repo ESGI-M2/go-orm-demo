@@ -1,24 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"time"
 
 	"go-orm-demo/shared"
 
 	"github.com/ESGI-M2/GO/orm/builder"
-	"github.com/ESGI-M2/GO/orm/core/interfaces"
 	"github.com/ESGI-M2/GO/orm/factory"
 )
-
-func seed(orm interfaces.ORM) {
-	repo := orm.Repository(&shared.User{})
-	for i := 0; i < 3; i++ {
-		name := fmt.Sprintf("Raw_%d", time.Now().UnixNano()%1e6+int64(i))
-		_ = repo.Save(&shared.User{Name: name, Email: fmt.Sprintf("%s@example.com", name), Age: 20 + i, CreatedAt: time.Now()})
-	}
-}
 
 func main() {
 	cfg := builder.NewConfigBuilder().
@@ -36,7 +25,8 @@ func main() {
 	defer ormBuilder.Close()
 
 	orm := ormBuilder.GetORM()
-	seed(orm)
+	repo := orm.Repository(&shared.User{})
+	shared.SeedBulkUsers(repo, 3)
 
 	// raw select
 	rows, err := orm.Raw("SELECT id, name, age FROM user ORDER BY id DESC LIMIT 5").Find()

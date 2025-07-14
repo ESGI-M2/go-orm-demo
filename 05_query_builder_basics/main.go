@@ -3,21 +3,12 @@ package main
 import (
 	"fmt"
 	"log"
-	"time"
 
 	"go-orm-demo/shared"
 
 	"github.com/ESGI-M2/GO/orm/builder"
 	"github.com/ESGI-M2/GO/orm/factory"
 )
-
-func seed(repo interface{ Save(interface{}) error }) {
-	names := []string{"Alice", "Bob", "Charlie"}
-	for _, n := range names {
-		u := &shared.User{Name: n, Email: fmt.Sprintf("%s_%d@example.com", n, time.Now().Unix()), CreatedAt: time.Now()}
-		_ = repo.Save(u) // ignore duplicates errors in successive runs
-	}
-}
 
 func main() {
 	cfg := builder.NewConfigBuilder().
@@ -35,7 +26,7 @@ func main() {
 	defer orm.Close()
 
 	repo := orm.GetORM().Repository(&shared.User{})
-	seed(repo)
+	shared.SeedBasicUsers(repo)
 
 	qb := orm.GetORM().Query(&shared.User{}).
 		Where("name", "!=", "").
