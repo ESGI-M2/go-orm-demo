@@ -1,0 +1,44 @@
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.run
+
+# Output from go build / go run
+/bin/
+/pkg/
+
+# Object files & archives
+*.o
+*.a
+
+# Vendor dependencies (if vendored)
+/vendor/
+
+# Coverage profiles
+coverage.out
+*.coverprofile
+*.cover
+
+# Logs
+*.log
+
+# Editor / IDE files
+.idea/
+.vscode/
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+
+# Cursor workspace metadata
+.cursor/
